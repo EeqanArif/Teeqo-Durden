@@ -1,0 +1,22 @@
+import time, socket, board, busio
+import numpy as np, cv2, adafruit_mlx90640
+
+i2c = busio.I2C(board.SCL, board.SDA)
+mlx = adafruit_mlx90640.MLX90640(i2c)
+mlx.refresh_rate = adafruit_mlx90640.RefreshRate.REFRESH_4_HZ
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+UDP_IP = "192.168.X.X"; UDP_PORT = 5005
+
+frame = [0] * 768
+while True:
+    try:
+        mlx.getFrame(frame)
+        data = np.reshape(frame, (24, 32))
+        img = np.uint8(np.interp(data, (20, 40), (0, 255)))
+        img = cv2.resize(img, (320, 240))
+        img_color = cv2.applyColorMap(img, cv2.COLORMAP_INFERNO)
+        _, jpeg = cv2.imencode('.jpg', img_color)
+        sock.sendto(jpeg.tobytes(), (UDP_IP, UDP_PORT))
+    except Exception as e:
+        print("Error:", e)
