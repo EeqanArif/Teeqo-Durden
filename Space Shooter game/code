@@ -1,0 +1,199 @@
+import pygame
+import random
+import sys
+
+# Initialize
+pygame.init()
+WIDTH, HEIGHT = 600, 700
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Space Shooter")
+clock = pygame.time.Clock()
+
+# Colors
+WHITE = (255, 255, 255)
+RED = (255, 0, 0)
+GREEN = (0, 255, 0)
+BLUE = (0, 100, 255)
+DARK = (0, 0, 20)
+
+# Bullet
+bullet_img = pygame.Surface((5, 10))
+bullet_img.fill(WHITE)
+
+# Enemy
+enemy_img = pygame.Surface((40, 30))
+enemy_img.fill(RED)
+
+# Health pack
+health_pack_img = pygame.Surface((20, 20))
+health_pack_img.fill(GREEN)
+
+# Player class (blue triangle)
+class Player(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.image = pygame.Surface((50, 50), pygame.SRCALPHA)
+        pygame.draw.polygon(self.image, BLUE, [(25, 0), (0, 50), (50, 50)])
+        self.rect = self.image.get_rect()
+        self.rect.centerx = WIDTH // 2
+        self.rect.bottom = HEIGHT - 10
+        self.speed = 5
+        self.health = 5
+
+    def update(self, keys):
+        if keys[pygame.K_LEFT] and self.rect.left > 0:
+            self.rect.x -= self.speed
+        if keys[pygame.K_RIGHT] and self.rect.right < WIDTH:
+            self.rect.x += self.speed
+
+# Enemy class
+class Enemy(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.image = enemy_img
+        self.rect = self.image.get_rect()
+        self.rect.x = random.randint(0, WIDTH - self.rect.width)
+        self.rect.y = random.randint(-100, -40)
+        self.speed = random.randint(3, 6)
+
+    def update(self):
+        self.rect.y += self.speed
+        if self.rect.top > HEIGHT:
+            self.kill()
+
+# Bullet class
+class Bullet(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = bullet_img
+        self.rect = self.image.get_rect()
+        self.rect.centerx = x
+        self.rect.bottom = y
+        self.speed = -10
+
+    def update(self):
+        self.rect.y += self.speed
+        if self.rect.bottom < 0:
+            self.kill()
+
+# Health pack
+class HealthPack(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.image = health_pack_img
+        self.rect = self.image.get_rect()
+        self.rect.x = random.randint(0, WIDTH - self.rect.width)
+        self.rect.y = -20
+        self.speed = 3
+
+    def update(self):
+        self.rect.y += self.speed
+        if self.rect.top > HEIGHT:
+            self.kill()
+
+# Groups
+player = Player()
+player_group = pygame.sprite.Group(player)
+enemy_group = pygame.sprite.Group()
+bullet_group = pygame.sprite.Group()
+health_pack_group = pygame.sprite.Group()
+
+# Health bar
+def draw_health_bar(surf, x, y, hp, max_hp):
+    BAR_WIDTH, BAR_HEIGHT = 100, 10
+    fill = (hp / max_hp) * BAR_WIDTH
+    outline_rect = pygame.Rect(x, y, BAR_WIDTH, BAR_HEIGHT)
+    fill_rect = pygame.Rect(x, y, fill, BAR_HEIGHT)
+    pygame.draw.rect(surf, RED, fill_rect)
+    pygame.draw.rect(surf, WHITE, outline_rect, 2)
+
+# Game loop
+def main():
+    font = pygame.font.SysFont(None, 36)
+    running = True
+    spawn_timer = 0
+    health_pack_timer = 0
+    score = 0
+
+    while running:
+        clock.tick(60)
+        screen.fill(DARK)
+
+        # Events
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+        keys = pygame.key.get_pressed()
+        player.update(keys)
+
+        # Shoot
+        if keys[pygame.K_SPACE]:
+            if len(bullet_group) < 5:
+                bullet = Bullet(player.rect.centerx, player.rect.top)
+                bullet_group.add(bullet)
+
+        # Spawn enemies
+        spawn_timer += 1
+        if spawn_timer > 30:
+            enemy_group.add(Enemy())
+            spawn_timer = 0
+
+        # Spawn health pack every 10 seconds
+        health_pack_timer += 1
+        if health_pack_timer > 600:
+            health_pack_group.add(HealthPack())
+            health_pack_timer = 0
+
+        # Update
+        bullet_group.update()
+        enemy_group.update()
+        health_pack_group.update()
+
+        # Collisions
+        hits = pygame.sprite.groupcollide(enemy_group, bullet_group, True, True)
+        score += len(hits)
+
+        enemy_hits = pygame.sprite.spritecollide(player, enemy_group, True)
+        for _ in enemy_hits:
+            player.health -= 1
+            if player.health <= 0:
+                running = False
+
+        health_hits = pygame.sprite.spritecollide(player, health_pack_group, True)
+        for _ in health_hits:
+            if player.health < 5:
+                player.health += 1
+
+        # Draw
+        player_group.draw(screen)
+        enemy_group.draw(screen)
+        bullet_group.draw(screen)
+        health_pack_group.draw(screen)
+
+        draw_health_bar(screen, 10, 10, player.health, 5)
+        score_text = font.render(f"Score: {score}", True, WHITE)
+        screen.blit(score_text, (10, 30))
+
+        pygame.display.flip()
+
+    # Game over
+    game_over_text = font.render("Game Over! Press R to Restart or Q to Quit", True, WHITE)
+    screen.blit(game_over_text, (WIDTH // 2 - 200, HEIGHT // 2))
+    pygame.display.flip()
+
+    waiting = True
+    while waiting:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_r:
+                    main()
+                if event.key == pygame.K_q:
+                    pygame.quit()
+                    sys.exit()
+
+main()
